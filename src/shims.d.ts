@@ -1,17 +1,12 @@
-// Compile-time only shim: the published @tryforge/forgescript npm package
-// At runtime the real package is used; this file is erased on emit.
+// Compile-time only: the published @tryforge/forgescript package ships no
+// .d.ts files. Erased on emit; the real package is used at runtime.
 declare module "@tryforge/forgescript" {
   export enum ArgType {
-    String = 0,
-    Number = 1,
-    Boolean = 2,
-    User = 3,
-    Channel = 4,
-    Guild = 5,
-    Role = 6,
-    Enum = 7,
-    Json = 8,
-    Unknown = 9,
+    String = 1,
+    Number = 6,
+    Boolean = 19,
+    Json = 13,
+    Enum = 15,
   }
 
   export enum HTTPContentType {

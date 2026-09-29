@@ -38,13 +38,13 @@ exports.default = new forgescript_1.NativeFunction({
         if (ctx.http.response)
             delete ctx.http.response;
         const msStart = performance.now();
-        // Fast path: HTTPS without multipart form -> try HTTP/2 first.
+        // Multipart forms are left to fetch; everything else tries H2 first.
         const canTryH2 = typeof url === "string" && /^https:/i.test(url) && !ctx.http.form;
         if (canTryH2) {
             try {
                 const headers = { ...(ctx.http.headers ?? {}) };
                 const bodyBuf = ctx.http.body !== undefined ? Buffer.from(String(ctx.http.body)) : undefined;
-                const res = await (0, h2client_js_1.requestViaH2)(url, method, headers, bodyBuf);
+                const res = await (0, h2client_js_1.requestViaH2)(url, method, headers, bodyBuf, undefined, undefined, ctx.http.removedHeaders);
                 const ms = performance.now() - msStart;
                 const contentType = res.headers.get("content-type")?.split(";")[0]?.trim();
                 const overrideType = ctx.http.contentType;
@@ -86,10 +86,10 @@ exports.default = new forgescript_1.NativeFunction({
                 return this.success(res.status);
             }
             catch {
-                // Fall through to HTTP/1.1 below.
+                // Any H2 failure falls through to fetch below.
             }
         }
-        // Fallback: identical behaviour to core $httpRequest (undici fetch).
+        // Matches core $httpRequest exactly.
         const req = await (0, undici_1.fetch)(url, {
             ...ctx.http,
             method,

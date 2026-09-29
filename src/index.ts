@@ -1,5 +1,6 @@
 import { ForgeClient, ForgeExtension, FunctionManager } from "@tryforge/forgescript";
 import httpProtocol from "./natives/httpProtocol.js";
+import httpRemoveHeader from "./natives/httpRemoveHeader.js";
 import httpRequest from "./natives/httpRequest.js";
 
 export class ForgeH2 extends ForgeExtension {
@@ -8,7 +9,7 @@ export class ForgeH2 extends ForgeExtension {
   version = "1.0.0";
 
   init(_client: ForgeClient): void {
-    FunctionManager.addMany(httpRequest, httpProtocol);
+    FunctionManager.addMany(httpRequest, httpProtocol, httpRemoveHeader);
   }
 }
 

@@ -8,15 +8,13 @@ export interface H2Result {
 }
 export declare function getSession(origin: string): http2.ClientHttp2Session;
 export declare function closeAllSessions(): void;
-/**
- * Decompresses a body according to its `content-encoding`, mirroring what
- * undici's `fetch` does transparently. raw `node:http2` gives us raw bytes.
- */
+/** Fills in missing defaults. Headers the caller set always win. */
+export declare function withDefaultHeaders(headers: Record<string, string>, removed?: Set<string>): Record<string, string>;
+/** Decompresses per `content-encoding`, which fetch does transparently. */
 export declare function decompress(body: Buffer, encoding: string | null): Promise<Buffer>;
 /**
- * HTTP/2 request with automatic redirect following (default: 5 hops, matching
- * undici/`fetch`) and transparent body decompression.
+ * HTTP/2 request with redirect following and transparent decompression.
  *
- * @param redirectLimit max redirects to follow before erroring. `0` disables.
+ * @param redirectLimit max redirects to follow. `0` disables.
  */
-export declare function requestViaH2(urlStr: string, method: string, headers: Record<string, string>, body?: Buffer, timeoutMs?: number, redirectLimit?: number): Promise<H2Result>;
+export declare function requestViaH2(urlStr: string, method: string, headers: Record<string, string>, body?: Buffer, timeoutMs?: number, redirectLimit?: number, removed?: Set<string>): Promise<H2Result>;

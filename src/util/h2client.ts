@@ -57,10 +57,31 @@ const FORBIDDEN = new Set([
   "content-length",
 ]);
 
-/**
- * Decompresses a body according to its `content-encoding`, mirroring what
- * undici's `fetch` does transparently. raw `node:http2` gives us raw bytes.
- */
+// The headers undici's fetch sends on every request; node:http2 sends none.
+const DEFAULT_HEADERS: Record<string, string> = {
+  accept: "*/*",
+  "accept-encoding": `br, gzip, deflate${
+    typeof zlib.zstdDecompress === "function" ? ", zstd" : ""
+  }`,
+  "accept-language": "*",
+  "sec-fetch-mode": "cors",
+  "user-agent": "undici",
+};
+
+/** Fills in missing defaults. Headers the caller set always win. */
+export function withDefaultHeaders(
+  headers: Record<string, string>,
+  removed?: Set<string>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const given = new Set(Object.keys(headers).map((k) => k.toLowerCase()));
+  for (const [k, v] of Object.entries(DEFAULT_HEADERS)) {
+    if (!given.has(k) && !removed?.has(k)) out[k] = v;
+  }
+  return Object.assign(out, headers);
+}
+
+/** Decompresses per `content-encoding`, which fetch does transparently. */
 export function decompress(body: Buffer, encoding: string | null): Promise<Buffer> {
   const enc = (encoding ?? "").trim().toLowerCase();
   if (!body.length || !enc || enc === "identity") return Promise.resolve(body);
@@ -78,9 +99,7 @@ export function decompress(body: Buffer, encoding: string | null): Promise<Buffe
 
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
-/**
- * Single H2 round-trip. No redirect handling - see `requestViaH2`.
- */
+/** Single H2 round-trip, no redirect handling. */
 function requestOnce(
   url: URL,
   method: string,
@@ -162,7 +181,6 @@ function requestOnce(
 
       decompress(raw, encoding)
         .then((body) => {
-          // Match undici: drop the now-stale encoding/content-length headers.
           if (encoding && body !== raw) {
             out.delete("content-encoding");
             out.delete("content-length");
@@ -197,10 +215,9 @@ function requestOnce(
 }
 
 /**
- * HTTP/2 request with automatic redirect following (default: 5 hops, matching
- * undici/`fetch`) and transparent body decompression.
+ * HTTP/2 request with redirect following and transparent decompression.
  *
- * @param redirectLimit max redirects to follow before erroring. `0` disables.
+ * @param redirectLimit max redirects to follow. `0` disables.
  */
 export async function requestViaH2(
   urlStr: string,
@@ -208,17 +225,19 @@ export async function requestViaH2(
   headers: Record<string, string>,
   body?: Buffer,
   timeoutMs = 15000,
-  redirectLimit = 5
+  redirectLimit = 5,
+  removed?: Set<string>
 ): Promise<H2Result> {
   const url = new URL(urlStr);
   if (url.protocol !== "https:") throw new Error("H2 requires https:");
 
+  const merged = withDefaultHeaders(headers, removed);
   let current = url;
   let currentMethod = method.toUpperCase();
   let currentBody = body;
 
   for (let hop = 0; ; hop++) {
-    const res = await requestOnce(current, currentMethod, headers, currentBody, timeoutMs);
+    const res = await requestOnce(current, currentMethod, merged, currentBody, timeoutMs);
 
     if (!REDIRECT_STATUS.has(res.status)) return res;
 
@@ -230,12 +249,14 @@ export async function requestViaH2(
 
     const next = new URL(location, current);
 
-    // Drop the body/headers when rewriting to GET, per fetch spec.
+    // Per fetch spec, 303 (and 301/302 on POST) downgrade to a bodyless GET.
     if (res.status === 303 || ((res.status === 301 || res.status === 302) && currentMethod === "POST")) {
       currentMethod = "GET";
       currentBody = undefined;
-      delete headers["content-type"];
-      delete headers["content-length"];
+      for (const k of Object.keys(merged)) {
+        const name = k.toLowerCase();
+        if (name === "content-type" || name === "content-length") delete merged[k];
+      }
     }
 
     current = next;
