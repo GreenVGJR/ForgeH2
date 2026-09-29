@@ -10,4 +10,6 @@ npm install --allow-git=all https://github.com/GreenVGJR/ForgeH2
 
 ## Functions
 
-- `$httpProtocol` returns the protocol used by the last request: `h2` or `http/1.1`.
+- `$httpRequest[url;method;variable?]` - HTTP/2 Fetch
+- `$httpProtocol` - Return HTTP Protocol: `h2` or `http/1.1`
+- `$httpRemoveHeader[name]` - Remove default headers or something i think
