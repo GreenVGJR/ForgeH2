@@ -1,0 +1,30 @@
+{
+  "name": "forge.h2",
+  "version": "1.0.0",
+  "description": "ForgeScript extension that performs $httpRequest over HTTP/2",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "forgescript",
+    "forge",
+    "http2",
+    "h2",
+    "discord bots"
+  ],
+  "license": "GPL-3.0-only",
+  "type": "commonjs",
+  "dependencies": {
+    "undici": "^8.11.2"
+  },
+  "devDependencies": {
+    "@tryforge/forgescript": "^2.7.1",
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "@tryforge/forgescript": ">=2.0.0"
+  }
+}
