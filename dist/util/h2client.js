@@ -5,8 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSession = getSession;
 exports.closeAllSessions = closeAllSessions;
+exports.decompress = decompress;
 exports.requestViaH2 = requestViaH2;
 const http2_1 = __importDefault(require("http2"));
+const zlib_1 = __importDefault(require("zlib"));
 const undici_1 = require("undici");
 const sessions = new Map();
 function originOf(url) {
@@ -56,20 +58,34 @@ const FORBIDDEN = new Set([
     "host",
     "content-length",
 ]);
-function requestViaH2(urlStr, method, headers, body, timeoutMs = 15000) {
+/**
+ * Decompresses a body according to its `content-encoding`, mirroring what
+ * undici's `fetch` does transparently. raw `node:http2` gives us raw bytes.
+ */
+function decompress(body, encoding) {
+    const enc = (encoding ?? "").trim().toLowerCase();
+    if (!body.length || !enc || enc === "identity")
+        return Promise.resolve(body);
     return new Promise((resolve, reject) => {
-        let url;
-        try {
-            url = new URL(urlStr);
-        }
-        catch (err) {
-            reject(err);
-            return;
-        }
-        if (url.protocol !== "https:") {
-            reject(new Error("H2 requires https:"));
-            return;
-        }
+        const done = (err, out) => (err ? reject(err) : resolve(out));
+        if (enc === "gzip" || enc === "x-gzip")
+            zlib_1.default.gunzip(body, done);
+        else if (enc === "deflate")
+            zlib_1.default.inflate(body, done);
+        else if (enc === "br")
+            zlib_1.default.brotliDecompress(body, done);
+        else if (enc === "zstd" && typeof zlib_1.default.zstdDecompress === "function")
+            zlib_1.default.zstdDecompress(body, done);
+        else
+            resolve(body);
+    });
+}
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
+/**
+ * Single H2 round-trip. No redirect handling - see `requestViaH2`.
+ */
+function requestOnce(url, method, headers, body, timeoutMs) {
+    return new Promise((resolve, reject) => {
         let session;
         try {
             session = getSession(originOf(url));
@@ -137,12 +153,23 @@ function requestViaH2(urlStr, method, headers, body, timeoutMs = 15000) {
                 }
             }
             const socket = session.socket;
-            resolve({
-                status,
-                headers: out,
-                body: Buffer.concat(chunks),
-                protocol: socket?.alpnProtocol || "h2",
-            });
+            const raw = Buffer.concat(chunks);
+            const encoding = out.get("content-encoding");
+            decompress(raw, encoding)
+                .then((body) => {
+                // Match undici: drop the now-stale encoding/content-length headers.
+                if (encoding && body !== raw) {
+                    out.delete("content-encoding");
+                    out.delete("content-length");
+                }
+                resolve({
+                    status,
+                    headers: out,
+                    body,
+                    protocol: socket?.alpnProtocol || "h2",
+                });
+            })
+                .catch(reject);
         });
         req.on("error", (err) => {
             clearTimeout(timer);
@@ -161,5 +188,40 @@ function requestViaH2(urlStr, method, headers, body, timeoutMs = 15000) {
             reject(err);
         }
     });
+}
+/**
+ * HTTP/2 request with automatic redirect following (default: 5 hops, matching
+ * undici/`fetch`) and transparent body decompression.
+ *
+ * @param redirectLimit max redirects to follow before erroring. `0` disables.
+ */
+async function requestViaH2(urlStr, method, headers, body, timeoutMs = 15000, redirectLimit = 5) {
+    const url = new URL(urlStr);
+    if (url.protocol !== "https:")
+        throw new Error("H2 requires https:");
+    let current = url;
+    let currentMethod = method.toUpperCase();
+    let currentBody = body;
+    for (let hop = 0;; hop++) {
+        const res = await requestOnce(current, currentMethod, headers, currentBody, timeoutMs);
+        if (!REDIRECT_STATUS.has(res.status))
+            return res;
+        const location = res.headers.get("location");
+        if (!location)
+            return res;
+        if (redirectLimit <= 0 || hop >= redirectLimit)
+            throw new Error(`H2 too many redirects (limit ${redirectLimit})`);
+        const next = new URL(location, current);
+        // Drop the body/headers when rewriting to GET, per fetch spec.
+        if (res.status === 303 || ((res.status === 301 || res.status === 302) && currentMethod === "POST")) {
+            currentMethod = "GET";
+            currentBody = undefined;
+            delete headers["content-type"];
+            delete headers["content-length"];
+        }
+        current = next;
+        if (current.protocol !== "https:")
+            throw new Error("H2 redirect left https:");
+    }
 }
 //# sourceMappingURL=h2client.js.map
