@@ -1,5 +1,5 @@
 {
-  "name": "forge.h2",
+  "name": "forgeH2",
   "version": "1.0.0",
   "description": "ForgeScript extension that performs $httpRequest over HTTP/2",
   "main": "dist/index.js",
