@@ -5,7 +5,7 @@ ForgeScript extension that performs `$httpRequest` over **HTTP/2** with automati
 ## Install
 
 ```
-npm install forge.h2
+npm install --allow-git=all https://github.com/GreenVGJR/ForgeH2
 ```
 
 ## Functions
