@@ -17,11 +17,11 @@
   "license": "GPL-3.0-only",
   "type": "commonjs",
   "dependencies": {
-    "undici": "^8.11.2"
+    "undici": "^8.12.3"
   },
   "devDependencies": {
     "@tryforge/forgescript": "^2.7.1",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "typescript": "^7.0.2"
   },
   "peerDependencies": {
